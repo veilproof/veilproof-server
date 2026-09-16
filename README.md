@@ -106,6 +106,7 @@ hash the circuit uses; see `crypto::leaf_commitment`.
 | Method & path                    | Body                    | Returns |
 | -------------------------------- | ----------------------- | ------- |
 | `GET  /health`                   | —                       | `{ "status": "ok" }` (503 if the DB is down) |
+| `GET  /version`                  | —                       | `{ name, version }` |
 | `GET  /issuers`                  | —                       | `{ "issuers": [name, ...] }` |
 | `GET  /issuers/{name}`           | —                       | `{ name, leaf_count, capacity, published_root }` |
 | `POST /issuers/{name}/leaves`    | `{ "commitment": hex }` | `{ "position", "count" }` |
