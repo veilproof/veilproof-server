@@ -13,6 +13,10 @@ path = "src/lib.rs"
 name = "veilproof-server"
 path = "src/main.rs"
 
+[[bin]]
+name = "veilproof-keygen"
+path = "src/bin/keygen.rs"
+
 [dependencies]
 # --- ZK / crypto (the trust-critical core) ---
 ark-bn254 = "0.5"

@@ -129,12 +129,14 @@ non-identifying values and is then dropped.
 
 **What it does not protect.**
 
-- **The MVP trusted setup is insecure.** `crypto::dev_keys` uses a fixed seed so
-  the verifying key matches the registry's test vector. That means the toxic
-  waste is public, and anyone can forge proofs. A real deployment must run
-  `crypto::setup` with private, secure randomness (ideally a multi-party
-  ceremony or a universal setup) and destroy the toxic waste. The server logs a
-  warning at startup to make this impossible to miss.
+- **The development setup is insecure; a production path is provided.**
+  `crypto::dev_keys` uses a fixed seed so the verifying key matches the
+  registry's test vector — which means the toxic waste is public and anyone
+  could forge proofs. For production, run `veilproof-keygen <dir>` to generate
+  keys with the OS secure RNG (destroying the machine's state afterwards; a
+  multi-party ceremony is stronger), deploy the registry with the verifying key
+  it prints, and start the server with `VEILPROOF_KEYS_DIR=<dir>`. Without that
+  variable the server falls back to the dev setup and logs a loud warning.
 - **Soundness depends on the circuit**, which is shared with the registry. A
   flawed circuit produces proofs that verify but mean nothing; the server
   cannot detect that.

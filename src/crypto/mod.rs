@@ -8,6 +8,7 @@ pub mod mimc;
 
 use ark_bn254::{Bn254, Fr};
 use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_snark::SNARK;
 use rand::{CryptoRng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -30,6 +31,45 @@ impl Keys {
     pub fn encoded_vk(&self) -> EncodedVerifyingKey {
         EncodedVerifyingKey::from_arkworks(&self.vk)
     }
+
+    /// Persist the proving and verifying keys to `dir` as `pk.bin` / `vk.bin`
+    /// (arkworks canonical, uncompressed for fast load).
+    pub fn save(&self, dir: &std::path::Path) -> Result<(), KeyIoError> {
+        std::fs::create_dir_all(dir)?;
+        let mut pk_bytes = Vec::new();
+        self.pk.serialize_uncompressed(&mut pk_bytes)?;
+        std::fs::write(dir.join("pk.bin"), pk_bytes)?;
+        let mut vk_bytes = Vec::new();
+        self.vk.serialize_uncompressed(&mut vk_bytes)?;
+        std::fs::write(dir.join("vk.bin"), vk_bytes)?;
+        Ok(())
+    }
+
+    /// Load keys previously written by [`Keys::save`].
+    pub fn load(dir: &std::path::Path) -> Result<Self, KeyIoError> {
+        let pk_bytes = std::fs::read(dir.join("pk.bin"))?;
+        let pk = ProvingKey::<Bn254>::deserialize_uncompressed(&pk_bytes[..])?;
+        let vk_bytes = std::fs::read(dir.join("vk.bin"))?;
+        let vk = VerifyingKey::<Bn254>::deserialize_uncompressed(&vk_bytes[..])?;
+        Ok(Keys { pk, vk })
+    }
+}
+
+/// Generate keys with the operating system's secure RNG. This is the
+/// single-party production path: run it on a trusted machine, deploy the
+/// registry with the resulting verifying key, and destroy the machine's state
+/// so the toxic waste cannot be recovered. A multi-party ceremony is stronger
+/// still; see the README.
+pub fn generate_secure() -> Keys {
+    setup(&mut rand::rngs::OsRng)
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum KeyIoError {
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("key serialization error: {0}")]
+    Serialization(#[from] ark_serialize::SerializationError),
 }
 
 /// The deterministic seed used for the development trusted setup. It matches
@@ -145,4 +185,20 @@ pub enum CryptoError {
     NotAMember,
     #[error("proof generation failed")]
     ProvingFailed,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Keys survive a save/load round trip unchanged.
+    #[test]
+    fn keys_round_trip_through_disk() {
+        let keys = dev_keys();
+        let dir = std::env::temp_dir().join(format!("veilproof-keys-{}", std::process::id()));
+        keys.save(&dir).unwrap();
+        let loaded = Keys::load(&dir).unwrap();
+        assert_eq!(keys.encoded_vk(), loaded.encoded_vk());
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }
