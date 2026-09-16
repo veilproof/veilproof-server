@@ -1,0 +1,50 @@
+[package]
+name = "veilproof-server"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Backend service for veilproof: Merkle-tree management and Groth16 membership-proof generation for the veilproof-registry Soroban contract."
+
+[lib]
+name = "veilproof_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "veilproof-server"
+path = "src/main.rs"
+
+[dependencies]
+# --- ZK / crypto (the trust-critical core) ---
+ark-bn254 = "0.5"
+ark-ff = "0.5"
+ark-ec = "0.5"
+ark-groth16 = { version = "0.5", default-features = false }
+ark-relations = "0.5"
+ark-r1cs-std = { version = "0.5", default-features = false }
+ark-snark = "0.5"
+ark-serialize = "0.5"
+ark-std = "0.5"
+rand = "0.8"
+rand_chacha = "0.3"
+
+# --- API / runtime ---
+axum = "0.7"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+tower-http = { version = "0.6", features = ["trace"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# --- persistence ---
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "migrate"] }
+
+# --- misc ---
+hex = "0.4"
+thiserror = "1"
+
+[dev-dependencies]
+hex-literal = "0.4"
+
+[profile.release]
+opt-level = 3
