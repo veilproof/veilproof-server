@@ -118,6 +118,33 @@ impl Store {
         Ok(())
     }
 
+    /// All issuer names, alphabetically.
+    pub async fn list_issuers(&self) -> Result<Vec<String>, StoreError> {
+        Ok(
+            sqlx::query_scalar("SELECT name FROM issuers ORDER BY name ASC")
+                .fetch_all(&self.pool)
+                .await?,
+        )
+    }
+
+    /// Whether an issuer exists.
+    pub async fn issuer_exists(&self, issuer: &str) -> Result<bool, StoreError> {
+        let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM issuers WHERE name = $1")
+            .bind(issuer)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(n > 0)
+    }
+
+    /// Number of leaves in an issuer's tree.
+    pub async fn leaf_count(&self, issuer: &str) -> Result<usize, StoreError> {
+        let c: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM leaves WHERE issuer_name = $1")
+            .bind(issuer)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(c as usize)
+    }
+
     /// The issuer's last published root, if any.
     pub async fn published_root(&self, issuer: &str) -> Result<Option<Fr>, StoreError> {
         let row: Option<Option<String>> =
