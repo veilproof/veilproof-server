@@ -12,6 +12,18 @@ jobs:
   build:
     name: fmt, clippy, test, build
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: veilproof
+          POSTGRES_PASSWORD: veilproof
+          POSTGRES_DB: veilproof
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U veilproof"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -35,9 +47,12 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
-      # The crypto round-trip test (the centerpiece) needs no database.
+      # The crypto round-trip test needs no database; the store integration
+      # tests use the Postgres service above.
       - name: Test
         run: cargo test
+        env:
+          DATABASE_URL: postgres://veilproof:veilproof@localhost:5432/veilproof
 
       - name: Build
         run: cargo build --release
