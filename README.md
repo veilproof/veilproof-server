@@ -10,14 +10,6 @@ Generating a real, verifiable Groth16 proof (circuit design, trusted setup,
 witness generation, Soroban-specific serialization) is specialist work. This
 service does it behind a small HTTP API so issuers and holders don't have to.
 
-> ## ⚠️ Read the security note before deploying
->
-> The MVP ships a **deterministic development trusted setup**, which is
-> **insecure** — a known setup seed means known toxic waste, and anyone with
-> the toxic waste can forge membership proofs. It exists so the server
-> reproduces the registry's verifying key for testing. See
-> [Security & privacy](#security--privacy) before running this anywhere real.
-
 ## How it fits together
 
 ```
