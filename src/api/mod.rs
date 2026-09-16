@@ -29,6 +29,8 @@ pub struct AppState {
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/issuers", get(issuer::list_issuers))
+        .route("/issuers/{name}", get(issuer::issuer_info))
         .route("/issuers/{name}/leaves", post(issuer::add_leaf))
         .route("/issuers/{name}/publish", post(issuer::publish))
         .route("/issuers/{name}/root", get(issuer::get_root))

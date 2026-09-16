@@ -80,3 +80,47 @@ pub async fn get_root(
         )),
     }
 }
+
+#[derive(Serialize)]
+pub struct IssuersListResponse {
+    pub issuers: Vec<String>,
+}
+
+/// `GET /issuers` — list all known issuer names.
+pub async fn list_issuers(
+    State(state): State<AppState>,
+) -> Result<Json<IssuersListResponse>, ApiError> {
+    let issuers = state.store.list_issuers().await?;
+    Ok(Json(IssuersListResponse { issuers }))
+}
+
+#[derive(Serialize)]
+pub struct IssuerInfoResponse {
+    pub name: String,
+    pub leaf_count: usize,
+    pub capacity: usize,
+    /// The last published root as hex, or null if never published.
+    pub published_root: Option<String>,
+}
+
+/// `GET /issuers/{name}` — summary of an issuer's tree.
+pub async fn issuer_info(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<Json<IssuerInfoResponse>, ApiError> {
+    if !state.store.issuer_exists(&name).await? {
+        return Err(ApiError::NotFound("no such issuer".into()));
+    }
+    let leaf_count = state.store.leaf_count(&name).await?;
+    let published_root = state
+        .store
+        .published_root(&name)
+        .await?
+        .map(|r| hex::encode(fr_be(&r)));
+    Ok(Json(IssuerInfoResponse {
+        name,
+        leaf_count,
+        capacity: MerkleTree::CAPACITY,
+        published_root,
+    }))
+}
