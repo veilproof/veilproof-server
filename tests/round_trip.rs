@@ -30,6 +30,10 @@ use veilproof_server::merkle::MerkleTree;
 /// whose commitment sits at leaf 0, with 15 other arbitrary leaves.
 const FIXED_SECRET: u64 = 1_234_567_890;
 
+/// The holder address the committed vector binds to (matches the registry
+/// testvector). The proof is address-bound, so reproduction must use it.
+const FIXED_HOLDER: &str = "GBYNOOC3UUF2QBCNIRUEHK2J3JOCDSV2QTLG445GW5ZEENPYDSU33OFQ";
+
 fn fixed_tree() -> MerkleTree {
     let mut tree = MerkleTree::new();
     tree.push(crypto::leaf_commitment(Fr::from(FIXED_SECRET)))
@@ -50,7 +54,7 @@ fn reproduces_registry_accepted_vector() {
         proof,
         root,
         nullifier,
-    } = crypto::prove(&keys, &tree, Fr::from(FIXED_SECRET), &mut rng).unwrap();
+    } = crypto::prove(&keys, &tree, Fr::from(FIXED_SECRET), FIXED_HOLDER, &mut rng).unwrap();
 
     // Verifying key must match the key the contract is deployed with.
     let vk = keys.encoded_vk();
@@ -59,9 +63,21 @@ fn reproduces_registry_accepted_vector() {
     assert_eq!(vk.gamma_g2, vector::GAMMA_G2, "gamma_g2 mismatch");
     assert_eq!(vk.delta_g2, vector::DELTA_G2, "delta_g2 mismatch");
     assert_eq!(vk.ic.len(), vector::IC.len(), "ic length mismatch");
+    assert_eq!(
+        vk.ic.len(),
+        4,
+        "circuit should have 4 IC entries (one + 3 public inputs)"
+    );
     for (got, want) in vk.ic.iter().zip(vector::IC.iter()) {
         assert_eq!(got, want, "ic entry mismatch");
     }
+
+    // The server's address derivation matches the vector's bound address.
+    assert_eq!(
+        encoding::fr_be(&crypto::address_field(FIXED_HOLDER)),
+        vector::PUB_ADDR,
+        "address derivation mismatch"
+    );
 
     // Proof and public inputs must match the accepted bytes exactly.
     assert_eq!(proof.a, vector::PROOF_A, "proof.a mismatch");
@@ -85,7 +101,7 @@ fn arbitrary_tree_proof_verifies() {
     tree.push(crypto::leaf_commitment(secret)).unwrap(); // index 2
     tree.push(Fr::from(44u64)).unwrap();
 
-    let mp = crypto::prove(&keys, &tree, secret, &mut rng).unwrap();
+    let mp = crypto::prove(&keys, &tree, secret, FIXED_HOLDER, &mut rng).unwrap();
 
     // The encoded public values agree with a direct recomputation.
     assert_eq!(mp.root, encoding::fr_be(&tree.root()));
@@ -98,7 +114,8 @@ fn arbitrary_tree_proof_verifies() {
         &keys,
         &re,
         tree.root(),
-        crypto::nullifier(secret)
+        crypto::nullifier(secret),
+        crypto::address_field(FIXED_HOLDER),
     ));
 }
 
@@ -112,7 +129,7 @@ fn non_member_cannot_prove() {
 
     // A secret whose commitment is not in the tree.
     let outsider = Fr::from(424_242u64);
-    let res = crypto::prove(&keys, &tree, outsider, &mut rng);
+    let res = crypto::prove(&keys, &tree, outsider, FIXED_HOLDER, &mut rng);
     assert_eq!(res, Err(crypto::CryptoError::NotAMember));
 }
 
@@ -135,6 +152,7 @@ fn regenerate(
         constants: round_constants(),
         root: Some(tree.root()),
         nullifier: Some(crypto::nullifier(secret)),
+        addr: Some(crypto::address_field(FIXED_HOLDER)),
         secret: Some(secret),
         path_elements: Some(w.path_elements),
         path_indices: Some(w.path_indices),

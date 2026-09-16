@@ -63,7 +63,8 @@ async fn add_publish_read_and_prove() {
     // Prove against the stored tree — the full store → crypto path.
     let keys = crypto::dev_keys();
     let rebuilt = MerkleTree::from_leaves(store.leaves(&issuer).await.unwrap()).unwrap();
-    let mp = crypto::prove(&keys, &rebuilt, secret, &mut OsRng).unwrap();
+    let holder = "GBYNOOC3UUF2QBCNIRUEHK2J3JOCDSV2QTLG445GW5ZEENPYDSU33OFQ";
+    let mp = crypto::prove(&keys, &rebuilt, secret, holder, &mut OsRng).unwrap();
     assert_eq!(mp.root, encoding::fr_be(&rebuilt.root()));
     assert_eq!(mp.nullifier, encoding::fr_be(&crypto::nullifier(secret)));
 }
@@ -81,6 +82,7 @@ async fn non_member_secret_is_rejected() {
     let keys = crypto::dev_keys();
     let tree = MerkleTree::from_leaves(store.leaves(&issuer).await.unwrap()).unwrap();
     let outsider = Fr::from(999_999u64);
-    let res = crypto::prove(&keys, &tree, outsider, &mut OsRng);
+    let holder = "GBYNOOC3UUF2QBCNIRUEHK2J3JOCDSV2QTLG445GW5ZEENPYDSU33OFQ";
+    let res = crypto::prove(&keys, &tree, outsider, holder, &mut OsRng);
     assert_eq!(res, Err(crypto::CryptoError::NotAMember));
 }
