@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: veilproof
+      POSTGRES_PASSWORD: veilproof
+      POSTGRES_DB: veilproof
+    ports:
+      - "5432:5432"
+    volumes:
+      - veilproof-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U veilproof"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://veilproof:veilproof@postgres:5432/veilproof
+      VEILPROOF_BIND: 0.0.0.0:8080
+      RUST_LOG: info,veilproof_server=debug
+    ports:
+      - "8080:8080"
+
+volumes:
+  veilproof-pgdata:
