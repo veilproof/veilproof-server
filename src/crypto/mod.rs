@@ -7,11 +7,13 @@ pub mod encoding;
 pub mod mimc;
 
 use ark_bn254::{Bn254, Fr};
+use ark_ff::PrimeField;
 use ark_groth16::{Groth16, ProvingKey, VerifyingKey};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_snark::SNARK;
 use rand::{CryptoRng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
+use sha2::{Digest, Sha256};
 
 use crate::merkle::MerkleTree;
 use circuit::MerkleCircuit;
@@ -114,6 +116,15 @@ pub fn nullifier(secret: Fr) -> Fr {
     hash2(secret, Fr::from(NULLIFIER_DOMAIN), &round_constants())
 }
 
+/// Bind a Stellar address to a field element: `Fr(sha256(strkey) mod r)`.
+/// veilproof-registry computes the identical value on-chain from
+/// `holder.to_string()`, so a proof generated for one address verifies only
+/// for that address — which is what prevents a proof being replayed by another
+/// party.
+pub fn address_field(strkey: &str) -> Fr {
+    Fr::from_be_bytes_mod_order(&Sha256::digest(strkey.as_bytes()))
+}
+
 /// A membership proof, encoded for direct submission to `veilproof-registry`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MembershipProof {
@@ -132,6 +143,7 @@ pub fn prove<R: RngCore + CryptoRng>(
     keys: &Keys,
     tree: &MerkleTree,
     secret: Fr,
+    holder_strkey: &str,
     rng: &mut R,
 ) -> Result<MembershipProof, CryptoError> {
     let leaf = leaf_commitment(secret);
@@ -144,11 +156,13 @@ pub fn prove<R: RngCore + CryptoRng>(
 
     let root = tree.root();
     let null = nullifier(secret);
+    let addr = address_field(holder_strkey);
 
     let circuit = MerkleCircuit {
         constants: round_constants(),
         root: Some(root),
         nullifier: Some(null),
+        addr: Some(addr),
         secret: Some(secret),
         path_elements: Some(witness.path_elements),
         path_indices: Some(witness.path_indices),
@@ -159,7 +173,7 @@ pub fn prove<R: RngCore + CryptoRng>(
 
     // Self-check before handing back bytes: a proof that doesn't even verify
     // locally must never be returned as if it were usable.
-    let public_inputs = [root, null];
+    let public_inputs = [root, null, addr];
     let ok = Groth16::<Bn254>::verify(&keys.vk, &public_inputs, &proof)
         .map_err(|_| CryptoError::ProvingFailed)?;
     if !ok {
@@ -175,8 +189,14 @@ pub fn prove<R: RngCore + CryptoRng>(
 
 /// Local Groth16 verification against the verifying key, for tests and
 /// sanity checks. On-chain verification is the registry contract's job.
-pub fn verify_local(keys: &Keys, proof: &ark_groth16::Proof<Bn254>, root: Fr, null: Fr) -> bool {
-    Groth16::<Bn254>::verify(&keys.vk, &[root, null], proof).unwrap_or(false)
+pub fn verify_local(
+    keys: &Keys,
+    proof: &ark_groth16::Proof<Bn254>,
+    root: Fr,
+    null: Fr,
+    addr: Fr,
+) -> bool {
+    Groth16::<Bn254>::verify(&keys.vk, &[root, null, addr], proof).unwrap_or(false)
 }
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]

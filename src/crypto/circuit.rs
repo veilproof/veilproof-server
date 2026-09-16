@@ -11,6 +11,8 @@
 //! Public inputs, in this exact order (the contract's `vk.ic` matches it):
 //!   1. root
 //!   2. nullifier
+//!   3. addr — the holder address bound to the proof, so it cannot be replayed
+//!      by another party
 
 use ark_bn254::Fr;
 use ark_r1cs_std::alloc::AllocVar;
@@ -36,6 +38,7 @@ pub struct MerkleCircuit {
     // public inputs
     pub root: Option<Fr>,
     pub nullifier: Option<Fr>,
+    pub addr: Option<Fr>,
     // private witness
     pub secret: Option<Fr>,
     pub path_elements: Option<Vec<Fr>>,
@@ -49,6 +52,7 @@ impl MerkleCircuit {
             constants,
             root: None,
             nullifier: None,
+            addr: None,
             secret: None,
             path_elements: None,
             path_indices: None,
@@ -64,6 +68,14 @@ impl ConstraintSynthesizer<Fr> for MerkleCircuit {
         let nullifier = FpVar::new_input(cs.clone(), || {
             self.nullifier.ok_or(SynthesisError::AssignmentMissing)
         })?;
+        // The holder address, bound as a public input. Not tied to the
+        // witness — the verifier supplies it (derived from the caller) so a
+        // proof only verifies for the address it was generated for. One
+        // multiplication gate keeps it a real part of the constraint system.
+        let addr = FpVar::new_input(cs.clone(), || {
+            self.addr.ok_or(SynthesisError::AssignmentMissing)
+        })?;
+        let _addr_bound = &addr * &addr;
         let secret = FpVar::new_witness(cs.clone(), || {
             self.secret.ok_or(SynthesisError::AssignmentMissing)
         })?;

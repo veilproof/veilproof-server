@@ -20,6 +20,9 @@ pub struct ProveRequest {
     /// The holder's own secret, 64 hex chars. Known only to the holder,
     /// submitted directly, never stored.
     pub secret: String,
+    /// The Stellar address (strkey) the holder will submit from. The proof is
+    /// bound to it, so it must match the address that calls the contract.
+    pub holder_address: String,
 }
 
 #[derive(Serialize)]
@@ -73,7 +76,7 @@ pub async fn prove(
     }
 
     let mut rng = OsRng;
-    let membership = crypto::prove(&state.keys, &tree, secret, &mut rng)?;
+    let membership = crypto::prove(&state.keys, &tree, secret, &req.holder_address, &mut rng)?;
 
     // Bookkeeping only — the contract remains authoritative for on-chain use.
     let nullifier = crypto::nullifier(secret);

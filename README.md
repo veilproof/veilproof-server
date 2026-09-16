@@ -95,7 +95,7 @@ curl -X POST localhost:8080/issuers/kyc/leaves \
 curl -X POST localhost:8080/issuers/kyc/publish     # → { "root": "..." }
 curl -X POST localhost:8080/issuers/kyc/prove \
   -H 'content-type: application/json' \
-  -d '{"secret":"<64 hex chars>"}'                  # → { proof, root, nullifier }
+  -d '{"secret":"<64 hex chars>","holder_address":"G..."}'  # → { proof, root, nullifier }
 ```
 
 The commitment for a secret is `H(secret, LEAF_DOMAIN)` under the same MiMC
@@ -112,7 +112,7 @@ hash the circuit uses; see `crypto::leaf_commitment`.
 | `POST /issuers/{name}/leaves`    | `{ "commitment": hex }` | `{ "position", "count" }` |
 | `POST /issuers/{name}/publish`   | —                       | `{ "root": hex }` |
 | `GET  /issuers/{name}/root`      | —                       | `{ "root": hex }` (404 if never published) |
-| `POST /issuers/{name}/prove`     | `{ "secret": hex }`     | `{ "proof": {a,b,c}, "root", "nullifier" }` |
+| `POST /issuers/{name}/prove`     | `{ "secret": hex, "holder_address": strkey }` | `{ "proof": {a,b,c}, "root", "nullifier" }` |
 
 `prove` refuses if the tree has changed since the last `publish` (HTTP 409):
 the proof's root is a public input the contract checks against its on-chain
@@ -121,11 +121,17 @@ root, so the server will not hand back a proof the contract would reject.
 ## Security & privacy
 
 **What the server knows.** Only leaf **commitments** (hashes issuers compute
-off-chain) and, transiently, a holder's **secret** while building a proof. It
-never receives, stores, or logs raw PII, and it never links a leaf to a
-real-world identity — that mapping stays with the issuer, off-chain. The holder
-submits their secret directly to `/prove`; it is used to derive public,
-non-identifying values and is then dropped.
+off-chain) and, transiently, a holder's **secret** and **address** while
+building a proof. It never receives, stores, or logs raw PII, and it never
+links a leaf to a real-world identity — that mapping stays with the issuer,
+off-chain. The holder submits their secret directly to `/prove`; it is used to
+derive public, non-identifying values and is then dropped.
+
+**Proofs are address-bound.** `/prove` takes the holder's Stellar address and
+binds it into the proof as a public input (`Fr(sha256(strkey) mod r)`, the same
+derivation the contract performs on-chain). A proof therefore verifies only for
+the address it was generated for, so one observed in transit cannot be replayed
+by another party.
 
 **What it does not protect.**
 
