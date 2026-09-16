@@ -7,12 +7,14 @@ pub mod issuer;
 
 use std::sync::Arc;
 
+use axum::extract::DefaultBodyLimit;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::json;
+use tower_http::trace::TraceLayer;
 
 use crate::crypto::{CryptoError, Keys};
 use crate::store::{Store, StoreError};
@@ -29,13 +31,26 @@ pub struct AppState {
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/version", get(version))
         .route("/issuers", get(issuer::list_issuers))
         .route("/issuers/{name}", get(issuer::issuer_info))
         .route("/issuers/{name}/leaves", post(issuer::add_leaf))
         .route("/issuers/{name}/publish", post(issuer::publish))
         .route("/issuers/{name}/root", get(issuer::get_root))
         .route("/issuers/{name}/prove", post(holder::prove))
+        // Requests here are small (a hex commitment or secret, no root); cap
+        // the body so a client can't stream an unbounded payload.
+        .layer(DefaultBodyLimit::max(16 * 1024))
+        .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+/// `GET /version` — build identification, handy for checking what is deployed.
+async fn version() -> Json<serde_json::Value> {
+    Json(json!({
+        "name": env!("CARGO_PKG_NAME"),
+        "version": env!("CARGO_PKG_VERSION"),
+    }))
 }
 
 async fn health(State(state): State<AppState>) -> Response {
