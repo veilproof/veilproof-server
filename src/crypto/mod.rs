@@ -49,11 +49,38 @@ impl Keys {
 
     /// Load keys previously written by [`Keys::save`].
     pub fn load(dir: &std::path::Path) -> Result<Self, KeyIoError> {
-        let pk_bytes = std::fs::read(dir.join("pk.bin"))?;
-        let pk = ProvingKey::<Bn254>::deserialize_uncompressed(&pk_bytes[..])?;
-        let vk_bytes = std::fs::read(dir.join("vk.bin"))?;
-        let vk = VerifyingKey::<Bn254>::deserialize_uncompressed(&vk_bytes[..])?;
+        Self::from_bytes(
+            &std::fs::read(dir.join("pk.bin"))?,
+            &std::fs::read(dir.join("vk.bin"))?,
+        )
+    }
+
+    /// Parse keys from the same bytes [`Keys::save`] writes, wherever they came
+    /// from — a file, a volume, or an HTTP fetch at boot.
+    pub fn from_bytes(pk_bytes: &[u8], vk_bytes: &[u8]) -> Result<Self, KeyIoError> {
+        let pk = ProvingKey::<Bn254>::deserialize_uncompressed(pk_bytes)?;
+        let vk = VerifyingKey::<Bn254>::deserialize_uncompressed(vk_bytes)?;
         Ok(Keys { pk, vk })
+    }
+
+    /// A stable fingerprint of the verifying key: SHA-256 over its Soroban
+    /// encoding, which is exactly the bytes registered on-chain.
+    ///
+    /// The point of hashing the *encoded* form rather than the arkworks
+    /// serialization is that this digest identifies the circuit the way
+    /// veilproof-registry sees it. If it matches the registered circuit, proofs
+    /// this server produces are ones that contract will accept.
+    pub fn vk_digest(&self) -> [u8; 32] {
+        let vk = self.encoded_vk();
+        let mut h = Sha256::new();
+        h.update(vk.alpha_g1);
+        h.update(vk.beta_g2);
+        h.update(vk.gamma_g2);
+        h.update(vk.delta_g2);
+        for ic in &vk.ic {
+            h.update(ic);
+        }
+        h.finalize().into()
     }
 }
 
