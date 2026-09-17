@@ -50,6 +50,9 @@ thiserror = "1"
 
 [dev-dependencies]
 hex-literal = "0.4"
+# Driving the router directly in tests/routes.rs, without binding a port.
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
 
 [profile.release]
 opt-level = 3
