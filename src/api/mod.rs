@@ -33,11 +33,14 @@ pub fn router(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/version", get(version))
         .route("/issuers", get(issuer::list_issuers))
-        .route("/issuers/{name}", get(issuer::issuer_info))
-        .route("/issuers/{name}/leaves", post(issuer::add_leaf))
-        .route("/issuers/{name}/publish", post(issuer::publish))
-        .route("/issuers/{name}/root", get(issuer::get_root))
-        .route("/issuers/{name}/prove", post(holder::prove))
+        // `:name` is axum 0.7's path-parameter syntax. The `{name}` form is
+        // axum 0.8's; on 0.7 it is not a parameter at all, so every route
+        // below silently 404s. See tests/routes.rs.
+        .route("/issuers/:name", get(issuer::issuer_info))
+        .route("/issuers/:name/leaves", post(issuer::add_leaf))
+        .route("/issuers/:name/publish", post(issuer::publish))
+        .route("/issuers/:name/root", get(issuer::get_root))
+        .route("/issuers/:name/prove", post(holder::prove))
         // Requests here are small (a hex commitment or secret, no root); cap
         // the body so a client can't stream an unbounded payload.
         .layer(DefaultBodyLimit::max(16 * 1024))
