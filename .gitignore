@@ -2,3 +2,6 @@
 **/*.rs.bk
 .env
 .DS_Store
+
+# Trusted-setup keys (generated; never commit)
+/keys
