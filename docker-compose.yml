@@ -24,6 +24,11 @@ services:
       DATABASE_URL: postgres://veilproof:veilproof@postgres:5432/veilproof
       VEILPROOF_BIND: 0.0.0.0:8080
       RUST_LOG: info,veilproof_server=debug
+      # Trusted-setup keys produced by `veilproof-keygen`. Without this the
+      # server falls back to the insecure deterministic dev setup.
+      VEILPROOF_KEYS_DIR: /app/keys
+    volumes:
+      - ./keys:/app/keys:ro
     ports:
       - "8080:8080"
 
