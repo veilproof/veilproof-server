@@ -14,6 +14,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::json;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 use crate::crypto::{CryptoError, Keys};
@@ -44,8 +45,29 @@ pub fn router(state: AppState) -> Router {
         // Requests here are small (a hex commitment or secret, no root); cap
         // the body so a client can't stream an unbounded payload.
         .layer(DefaultBodyLimit::max(16 * 1024))
+        .layer(cors())
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+/// Cross-origin policy.
+///
+/// The dashboard is a static site on its own domain, so every call it makes is
+/// cross-origin; without this the browser blocks them all and the deployed API
+/// is unusable from anything but curl.
+///
+/// Any origin is allowed deliberately. This API has no cookies, no sessions and
+/// no ambient authority — a request is exactly as privileged as its contents,
+/// so an attacker's page gains nothing by calling it that it could not do
+/// directly from a server. Restricting origins would suggest a protection that
+/// does not exist. Authority on the write path lives on-chain: publishing a
+/// root and submitting a proof are wallet-signed contract calls, which this
+/// server cannot make.
+fn cors() -> CorsLayer {
+    CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any)
 }
 
 /// `GET /version` — build identification, handy for checking what is deployed.
