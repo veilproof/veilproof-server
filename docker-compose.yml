@@ -27,6 +27,11 @@ services:
       # Trusted-setup keys produced by `veilproof-keygen`. Without this the
       # server falls back to the insecure deterministic dev setup.
       VEILPROOF_KEYS_DIR: /app/keys
+      # Refuse to start unless those keys are the ones the on-chain circuit was
+      # registered with. Without this the fallback above is silent: the server
+      # comes up healthy and every proof it makes is rejected by the contract.
+      # Print the expected value with `veilproof-vk <keys-dir>`.
+      VEILPROOF_VK_SHA256: ${VEILPROOF_VK_SHA256:-}
     volumes:
       - ./keys:/app/keys:ro
     ports:
