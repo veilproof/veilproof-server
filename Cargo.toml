@@ -50,7 +50,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # --- persistence ---
-sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "migrate"] }
+# tls-rustls: hosted Postgres (Neon, and most managed providers) refuses
+# plaintext connections. rustls keeps the runtime image free of OpenSSL.
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "migrate"] }
 
 # --- misc ---
 # Fetching the trusted setup at boot; rustls so the runtime image needs no
