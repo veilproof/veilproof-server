@@ -118,6 +118,25 @@ hash the circuit uses; see `crypto::leaf_commitment`.
 the proof's root is a public input the contract checks against its on-chain
 root, so the server will not hand back a proof the contract would reject.
 
+### Computing a commitment (`veilproof-commit`)
+
+A holder's commitment is `H(secret, LEAF_DOMAIN)`. Deriving it does not require
+the server, and a holder should never send their secret anywhere just to learn
+it, so it has its own CLI:
+
+```sh
+cargo run --release --bin veilproof-commit          # mint a secret + commitment
+cargo run --release --bin veilproof-commit <secret> # recompute from a secret
+```
+
+```
+secret     = 0000…0007   # the holder keeps this
+commitment = 2638…3741   # the holder sends the issuer only this
+```
+
+The issuer adds the commitment with `POST /issuers/{name}/leaves`; the holder
+later passes the same secret to `POST /issuers/{name}/prove`.
+
 ## Security & privacy
 
 **What the server knows.** Only leaf **commitments** (hashes issuers compute
@@ -162,6 +181,7 @@ src/crypto/      circuit, trusted setup, proving, Soroban encoding (the core)
 src/merkle.rs    the Merkle tree
 src/store.rs     Postgres persistence
 src/api/         axum handlers — issuer.rs (tree mgmt), holder.rs (proving)
+src/bin/         keygen (trusted setup), commit (holder commitments)
 tests/           the round-trip centerpiece + unit tests
 migrations/      Postgres schema
 ```
