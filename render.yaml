@@ -1,5 +1,10 @@
-# Render blueprint. Create a new Blueprint Instance from this repo and Render
-# builds the Dockerfile, provisions Postgres, and wires DATABASE_URL in.
+# Render blueprint. In the Render dashboard: New -> Blueprint -> this repo.
+#
+# The database is external (Neon's free tier) rather than Render's own free
+# Postgres, which Render deletes after 30 days — too short for a link that has
+# to keep working. Render prompts for DATABASE_URL when the blueprint is
+# created; paste the Neon connection string there (it includes sslmode=require,
+# which the server supports).
 #
 # The trusted setup is fetched at boot from the keys-testnet release, so no key
 # material lives in this repo or in the image. VEILPROOF_VK_SHA256 makes the
@@ -16,9 +21,7 @@ services:
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: veilproof-db
-          property: connectionString
+        sync: false
       - key: VEILPROOF_BIND
         value: 0.0.0.0:10000
       - key: VEILPROOF_KEYS_URL
@@ -27,7 +30,3 @@ services:
         value: 85d36192c03cb9240eeb03cb6a7c8dd954fac43ca31955e01fadd2b58f827218
       - key: RUST_LOG
         value: info,veilproof_server=info
-
-databases:
-  - name: veilproof-db
-    plan: free
