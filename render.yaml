@@ -1,0 +1,33 @@
+# Render blueprint. Create a new Blueprint Instance from this repo and Render
+# builds the Dockerfile, provisions Postgres, and wires DATABASE_URL in.
+#
+# The trusted setup is fetched at boot from the keys-testnet release, so no key
+# material lives in this repo or in the image. VEILPROOF_VK_SHA256 makes the
+# server refuse to start unless those keys are the ones veilproof-registry's
+# `membership` circuit was registered with.
+#
+# See DEPLOYING.md.
+services:
+  - type: web
+    name: veilproof-server
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: veilproof-db
+          property: connectionString
+      - key: VEILPROOF_BIND
+        value: 0.0.0.0:10000
+      - key: VEILPROOF_KEYS_URL
+        value: https://github.com/veilproof/veilproof-server/releases/download/keys-testnet
+      - key: VEILPROOF_VK_SHA256
+        value: 85d36192c03cb9240eeb03cb6a7c8dd954fac43ca31955e01fadd2b58f827218
+      - key: RUST_LOG
+        value: info,veilproof_server=info
+
+databases:
+  - name: veilproof-db
+    plan: free

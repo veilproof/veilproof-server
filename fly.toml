@@ -1,0 +1,38 @@
+# Fly.io deployment. See DEPLOYING.md for the full sequence.
+#
+# The trusted setup is fetched at boot from the keys-testnet release, so no key
+# material lives in this repo or in the image, and VEILPROOF_VK_SHA256 makes the
+# server refuse to start unless those keys match the circuit registered on
+# veilproof-registry.
+
+app = "veilproof-server"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  VEILPROOF_BIND = "0.0.0.0:8080"
+  VEILPROOF_KEYS_URL = "https://github.com/veilproof/veilproof-server/releases/download/keys-testnet"
+  VEILPROOF_VK_SHA256 = "85d36192c03cb9240eeb03cb6a7c8dd954fac43ca31955e01fadd2b58f827218"
+  RUST_LOG = "info,veilproof_server=info"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Keep one machine warm. Scaling to zero saves nothing meaningful here and
+  # costs a reviewer a cold start on a link that is supposed to just work.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[http_service.checks]]
+  grace_period = "20s"
+  interval = "30s"
+  method = "GET"
+  path = "/health"
+  timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
