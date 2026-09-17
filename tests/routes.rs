@@ -160,3 +160,82 @@ async fn a_genuinely_unknown_path_404s_with_an_empty_body() {
         "a braced segment should be treated as an ordinary issuer name: {body:?}",
     );
 }
+
+/// Send a request with explicit headers, returning status and response headers.
+async fn send_with_headers(
+    state: &AppState,
+    method: &str,
+    path: &str,
+    headers: &[(&str, &str)],
+) -> (StatusCode, axum::http::HeaderMap) {
+    let mut req = Request::builder().method(method).uri(path);
+    for (k, v) in headers {
+        req = req.header(*k, *v);
+    }
+    let res = router(state.clone())
+        .oneshot(req.body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    (res.status(), res.headers().clone())
+}
+
+#[tokio::test]
+async fn cors_preflight_is_answered() {
+    let Some(state) = state_or_skip().await else {
+        eprintln!("skipping: DATABASE_URL not set");
+        return;
+    };
+
+    // The dashboard is on its own domain, so a POST with a JSON content-type is
+    // preceded by this preflight. If it is not answered the browser never sends
+    // the real request and the deployed API is unusable from the web app —
+    // while curl, which does no preflight, keeps working.
+    let (status, headers) = send_with_headers(
+        &state,
+        "OPTIONS",
+        "/issuers/anything/prove",
+        &[
+            ("origin", "https://veilproof-web.vercel.app"),
+            ("access-control-request-method", "POST"),
+            ("access-control-request-headers", "content-type"),
+        ],
+    )
+    .await;
+
+    assert!(
+        status.is_success(),
+        "preflight should succeed, got {status}"
+    );
+    assert!(
+        headers.contains_key("access-control-allow-origin"),
+        "preflight response carries no allow-origin header: {headers:?}",
+    );
+    let allowed = headers["access-control-allow-methods"].to_str().unwrap();
+    assert!(
+        allowed.contains("POST") || allowed.contains('*'),
+        "POST is not an allowed method: {allowed}",
+    );
+}
+
+#[tokio::test]
+async fn ordinary_responses_carry_the_allow_origin_header() {
+    let Some(state) = state_or_skip().await else {
+        eprintln!("skipping: DATABASE_URL not set");
+        return;
+    };
+
+    // Answering the preflight is not enough: the browser also checks the header
+    // on the actual response before handing the body to JavaScript.
+    let (status, headers) = send_with_headers(
+        &state,
+        "GET",
+        "/issuers",
+        &[("origin", "https://veilproof-web.vercel.app")],
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        headers.contains_key("access-control-allow-origin"),
+        "GET /issuers response carries no allow-origin header",
+    );
+}

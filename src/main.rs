@@ -9,7 +9,7 @@ use tokio::signal;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use veilproof_server::api::{router, AppState};
-use veilproof_server::crypto;
+use veilproof_server::keysource;
 use veilproof_server::store::Store;
 
 #[tokio::main]
@@ -25,25 +25,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
         .parse()?;
 
-    // Trusted setup. If VEILPROOF_KEYS_DIR points at keys produced by
-    // `veilproof-keygen` (or a ceremony), load them. Otherwise fall back to
-    // the deterministic development setup, which is INSECURE (a known seed
-    // means known toxic waste — anyone can forge proofs). See the README.
-    let keys = match std::env::var("VEILPROOF_KEYS_DIR") {
-        Ok(dir) => {
-            let keys = crypto::Keys::load(std::path::Path::new(&dir))?;
-            tracing::info!(dir, "loaded trusted-setup keys from disk");
-            Arc::new(keys)
-        }
-        Err(_) => {
-            tracing::warn!(
-                "VEILPROOF_KEYS_DIR not set — using the DEVELOPMENT trusted setup \
-                 (deterministic, insecure). Do not use for anything of value; \
-                 run veilproof-keygen and set VEILPROOF_KEYS_DIR. See the README."
-            );
-            Arc::new(crypto::dev_keys())
-        }
-    };
+    // Trusted setup, from a URL, a directory, or the insecure development
+    // fallback — see keysource for the precedence and the integrity pin.
+    let keys = Arc::new(keysource::load_from_env().await?);
 
     let store = Store::connect(&database_url).await?;
     tracing::info!("database connected and migrated");

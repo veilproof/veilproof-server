@@ -6,5 +6,6 @@
 
 pub mod api;
 pub mod crypto;
+pub mod keysource;
 pub mod merkle;
 pub mod store;
