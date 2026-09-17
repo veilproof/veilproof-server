@@ -55,14 +55,29 @@ fly deploy
 
 `fly.toml` already carries the keys URL and the digest pin.
 
-## Render
+Fly needs a payment method on the organization. On a trial org the platform
+stops every machine five minutes after it starts — `requested_stop=true`, from
+`flyd`, regardless of `restart` policy or `auto_stop_machines` — so the database
+disappears mid-session and the app crash-loops trying to reach it.
 
-`render.yaml` is a blueprint: point Render at this repo, and it builds the
-Dockerfile, provisions Postgres, and injects `DATABASE_URL`.
+## Render + Neon (free)
 
-Render's free web services sleep after inactivity and take roughly a minute to
-wake. That is survivable for a demo, but if the link needs to answer promptly
-every time, use a paid instance type or Fly.
+The free path. Render runs the container; [Neon](https://neon.tech) provides
+Postgres. Render's own free Postgres is deleted after 30 days, which is too
+short for a link meant to keep working; Neon's free tier does not expire.
+
+1. **Neon:** create a project and copy its connection string. It ends in
+   `sslmode=require`; the server is built with TLS support for exactly this.
+2. **Render:** New → Blueprint → this repository. `render.yaml` sets everything
+   except `DATABASE_URL`, which Render prompts for — paste the Neon string.
+3. Check the deploy logs for `verifying key matches VEILPROOF_VK_SHA256`.
+
+Both free tiers idle out. A Render web service sleeps after about 15 minutes
+without traffic and takes up to a minute to wake on the next request; Neon
+suspends compute after 5 minutes and resumes in well under a second. So the
+first request after a quiet spell is slow, and everything after it is not. The
+server tolerates the database going away between requests: dead pooled
+connections are detected and replaced.
 
 ## Any Docker host
 
