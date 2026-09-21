@@ -8,12 +8,14 @@ pub mod issuer;
 use std::sync::Arc;
 
 use axum::extract::DefaultBodyLimit;
-use axum::extract::State;
+use axum::extract::{Request, State};
 use axum::http::StatusCode;
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::json;
+use tokio::sync::Semaphore;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -28,8 +30,37 @@ pub struct AppState {
     pub keys: Arc<Keys>,
 }
 
-/// Build the router.
+/// How many proofs may be generated at once, from
+/// `VEILPROOF_MAX_CONCURRENT_PROOFS`.
+pub const ENV_MAX_CONCURRENT_PROOFS: &str = "VEILPROOF_MAX_CONCURRENT_PROOFS";
+
+/// Default concurrent-proof budget. Deliberately small: proving is seconds of
+/// CPU each, and the deployment targets hosts with a fraction of a core.
+pub const DEFAULT_MAX_CONCURRENT_PROOFS: usize = 2;
+
+/// Build the router, taking the proof budget from the environment.
 pub fn router(state: AppState) -> Router {
+    let capacity = std::env::var(ENV_MAX_CONCURRENT_PROOFS)
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(DEFAULT_MAX_CONCURRENT_PROOFS);
+    router_with_prove_capacity(state, capacity)
+}
+
+/// Build the router with an explicit proof budget. Tests use this rather than
+/// setting a process-wide environment variable.
+pub fn router_with_prove_capacity(state: AppState, capacity: usize) -> Router {
+    // Only `/prove` is metered. Everything else is cheap, and starving reads
+    // because proving is busy would be its own outage.
+    let proving = Router::new()
+        .route("/issuers/:name/prove", post(holder::prove))
+        .route_layer(middleware::from_fn_with_state(
+            Arc::new(Semaphore::new(capacity)),
+            limit_concurrent_proofs,
+        ))
+        .with_state(state.clone());
+
     Router::new()
         .route("/health", get(health))
         .route("/version", get(version))
@@ -41,13 +72,46 @@ pub fn router(state: AppState) -> Router {
         .route("/issuers/:name/leaves", post(issuer::add_leaf))
         .route("/issuers/:name/publish", post(issuer::publish))
         .route("/issuers/:name/root", get(issuer::get_root))
-        .route("/issuers/:name/prove", post(holder::prove))
         // Requests here are small (a hex commitment or secret, no root); cap
         // the body so a client can't stream an unbounded payload.
+        .with_state(state)
+        .merge(proving)
         .layer(DefaultBodyLimit::max(16 * 1024))
         .layer(cors())
         .layer(TraceLayer::new_for_http())
-        .with_state(state)
+}
+
+/// Refuse a proof outright when the budget is spent, rather than queueing it.
+///
+/// Proving is unauthenticated and costs the caller nothing while costing the
+/// server seconds of CPU, so an unbounded queue is a denial-of-service waiting
+/// to happen. Queued work is also usually work nobody is waiting for any more:
+/// the client has given up, but the server pays for it regardless. A fast 503
+/// tells the caller something true and lets it retry.
+async fn limit_concurrent_proofs(
+    State(permits): State<Arc<Semaphore>>,
+    req: Request,
+    next: Next,
+) -> Response {
+    match Arc::clone(&permits).try_acquire_owned() {
+        // The permit lives until the response is produced, which is what bounds
+        // the number of proofs actually running.
+        Ok(_permit) => next.run(req).await,
+        Err(_) => {
+            tracing::warn!(
+                capacity = permits.available_permits(),
+                "refused a proof: the concurrent-proof budget is spent"
+            );
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                [(axum::http::header::RETRY_AFTER, "5")],
+                Json(json!({
+                    "error": "the server is already generating as many proofs as it can handle; retry shortly"
+                })),
+            )
+                .into_response()
+        }
+    }
 }
 
 /// Cross-origin policy.
