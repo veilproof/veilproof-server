@@ -17,6 +17,7 @@ veilproof-registry with `ProofInvalid`. Set the pin.
 | `VEILPROOF_KEYS_URL` | one of these | base URL serving `pk.bin` and `vk.bin`, fetched at boot |
 | `VEILPROOF_KEYS_DIR` | one of these | directory holding `pk.bin` and `vk.bin` |
 | `VEILPROOF_VK_SHA256` | strongly recommended | expected verifying-key digest; refuses to start on a mismatch |
+| `VEILPROOF_MAX_CONCURRENT_PROOFS` | no | concurrent proof budget (default 2); `/prove` answers 503 beyond it |
 | `RUST_LOG` | no | tracing filter |
 
 If neither key variable is set the server falls back to the **insecure**
