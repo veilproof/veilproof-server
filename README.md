@@ -114,6 +114,12 @@ hash the circuit uses; see `crypto::leaf_commitment`.
 | `GET  /issuers/{name}/root`      | —                       | `{ "root": hex }` (404 if never published) |
 | `POST /issuers/{name}/prove`     | `{ "secret": hex, "holder_address": strkey }` | `{ "proof": {a,b,c}, "root", "nullifier" }` |
 
+`prove` is bounded by a concurrent-proof budget
+(`VEILPROOF_MAX_CONCURRENT_PROOFS`, default 2). Beyond it the server answers
+**503** with `Retry-After` rather than queueing: proving is unauthenticated and
+costs seconds of CPU per call, and queued work is usually work the caller has
+already given up on. Per-client rate limiting is a separate concern — see #19.
+
 `prove` refuses if the tree has changed since the last `publish` (HTTP 409):
 the proof's root is a public input the contract checks against its on-chain
 root, so the server will not hand back a proof the contract would reject.
