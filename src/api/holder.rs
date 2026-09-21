@@ -6,6 +6,8 @@
 //! server never learns which real-world identity the leaf belongs to — it only
 //! ever sees commitments. Do not log the request body.
 
+use std::sync::Arc;
+
 use axum::extract::{Path, State};
 use axum::Json;
 use rand::rngs::OsRng;
@@ -75,8 +77,20 @@ pub async fn prove(
         }
     }
 
-    let mut rng = OsRng;
-    let membership = crypto::prove(&state.keys, &tree, secret, &req.holder_address, &mut rng)?;
+    // Groth16 proving is CPU-bound and takes seconds — far too long to sit on
+    // an async worker thread. Blocking the runtime stalls every other task on
+    // it, including /health, so a platform health check starts failing and the
+    // instance gets restarted mid-proof. On a host with a fraction of a core
+    // that is fatal: the request 502s and takes the service down with it.
+    // spawn_blocking moves the work to a pool meant for exactly this.
+    let keys = Arc::clone(&state.keys);
+    let holder_address = req.holder_address.clone();
+    let membership = tokio::task::spawn_blocking(move || {
+        let mut rng = OsRng;
+        crypto::prove(&keys, &tree, secret, &holder_address, &mut rng)
+    })
+    .await
+    .map_err(|e| ApiError::Internal(format!("the proving task failed: {e}")))??;
 
     // Bookkeeping only — the contract remains authoritative for on-chain use.
     let nullifier = crypto::nullifier(secret);
