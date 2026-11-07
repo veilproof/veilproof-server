@@ -12,6 +12,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "veilproof-server"
 path = "src/main.rs"
+required-features = ["server"]
 
 [[bin]]
 name = "veilproof-keygen"
@@ -24,6 +25,38 @@ path = "src/bin/commit.rs"
 [[bin]]
 name = "veilproof-vk"
 path = "src/bin/vk.rs"
+
+[[test]]
+name = "prove_limits"
+required-features = ["server"]
+
+[[test]]
+name = "responsiveness"
+required-features = ["server"]
+
+[[test]]
+name = "routes"
+required-features = ["server"]
+
+[[test]]
+name = "store_integration"
+required-features = ["server"]
+
+# The HTTP service and its database. Without this feature the crate is just the
+# crypto core and the Merkle tree, which is what prover/ compiles to WebAssembly.
+[features]
+default = ["server"]
+server = [
+    "dep:axum",
+    "dep:reqwest",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:sqlx",
+    "dep:tokio",
+    "dep:tower-http",
+    "dep:tracing",
+    "dep:tracing-subscriber",
+]
 
 [dependencies]
 # --- ZK / crypto (the trust-critical core) ---
@@ -41,23 +74,23 @@ rand_chacha = "0.3"
 sha2 = "0.10"
 
 # --- API / runtime ---
-axum = "0.7"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
-tower-http = { version = "0.6", features = ["trace", "cors"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+axum = { version = "0.7", optional = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"], optional = true }
+tower-http = { version = "0.6", features = ["trace", "cors"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
 
 # --- persistence ---
 # tls-rustls: hosted Postgres (Neon, and most managed providers) refuses
 # plaintext connections. rustls keeps the runtime image free of OpenSSL.
-sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "migrate"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "macros", "migrate"], optional = true }
 
 # --- misc ---
 # Fetching the trusted setup at boot; rustls so the runtime image needs no
 # OpenSSL. Only the pieces required for a plain GET.
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"], optional = true }
 hex = "0.4"
 thiserror = "1"
 
