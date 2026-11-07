@@ -63,6 +63,36 @@ to output the real contract is demonstrated to accept. Run it:
 cargo test --test round_trip
 ```
 
+## Proving without this server
+
+`prover/` compiles the same circuit, Merkle tree and encoding to WebAssembly, and
+[veilproof-web][web] runs it in the browser. **That is the path where the holder's
+secret never leaves their machine**, and it takes no backend at all. The `/prove`
+endpoint below remains for integrators who want an API and are willing to trust
+its operator with their holders' secrets.
+
+```sh
+cd prover
+cargo test                                                # same bytes as the server
+cargo build --release --target wasm32-unknown-unknown     # about 800 KB
+```
+
+The module takes JSON requests (`new_secret`, `commitment`, `root`, `prove`,
+`vk_digest`, `verifying_key`) through a small set of raw exports, so no generated
+glue is needed and it runs in a browser or Node alike. It draws no randomness of
+its own: the caller seeds each request, and in a browser that means
+`crypto.getRandomValues`.
+
+A witness endpoint would tell its operator which leaf a holder is asking about.
+This design doesn't have one: the holder gets the whole list of commitments from
+the issuer, and computes their own witness locally. Publishing that list does
+reveal the set's size and its commitments, which are already what the root commits
+to, but not who they belong to.
+
+`prover-v*` tags publish the module as a release asset from CI. A proof from it was
+accepted by the deployed registry on testnet, a run that
+[`scripts/e2e-testnet.mjs`][registry-e2e] in veilproof-registry repeats.
+
 ## Library choices
 
 - **arkworks 0.5** (`ark-bn254`, `ark-groth16`, `ark-r1cs-std`, `ark-relations`)
@@ -145,6 +175,9 @@ later passes the same secret to `POST /issuers/{name}/prove`.
 
 ## Security & privacy
 
+This section is about running this server. A holder proving through the browser
+prover above never sends it anything.
+
 **What the server knows.** Only leaf **commitments** (hashes issuers compute
 off-chain) and, transiently, a holder's **secret** and **address** while
 building a proof. It never receives, stores, or logs raw PII, and it never
@@ -188,6 +221,7 @@ src/merkle.rs    the Merkle tree
 src/store.rs     Postgres persistence
 src/api/         axum handlers — issuer.rs (tree mgmt), holder.rs (proving)
 src/bin/         keygen (trusted setup), commit (holder commitments)
+prover/          the crypto core compiled to WebAssembly, for the browser
 tests/           the round-trip centerpiece + unit tests
 migrations/      Postgres schema
 ```
@@ -204,3 +238,5 @@ Apache-2.0 — see [LICENSE](LICENSE).
 
 [registry]: https://github.com/veilproof/veilproof-registry
 [registry-encoding]: https://github.com/veilproof/veilproof-registry#bn254-encoding-notes
+[registry-e2e]: https://github.com/veilproof/veilproof-registry/blob/main/scripts/e2e-testnet.mjs
+[web]: https://github.com/veilproof/veilproof-web
