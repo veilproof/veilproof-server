@@ -56,3 +56,59 @@ jobs:
 
       - name: Build
         run: cargo build --release
+
+      # The crypto core has to keep building without the HTTP service and its
+      # database, or the browser prover stops compiling.
+      - name: Check the core alone
+        run: cargo check --no-default-features --all-targets
+
+  prover:
+    name: wasm prover
+    runs-on: ubuntu-latest
+    env:
+      VK_SHA256: 85d36192c03cb9240eeb03cb6a7c8dd954fac43ca31955e01fadd2b58f827218
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            prover/target
+          key: ${{ runner.os }}-prover-${{ hashFiles('prover/Cargo.lock') }}
+
+      - name: Format
+        working-directory: prover
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        working-directory: prover
+        run: |
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo clippy --locked --target wasm32-unknown-unknown -- -D warnings
+
+      - name: Test
+        working-directory: prover
+        run: cargo test --locked
+
+      - name: Build
+        working-directory: prover
+        run: cargo build --locked --release --target wasm32-unknown-unknown
+
+      - name: Smoke test the wasm
+        run: |
+          mkdir keys
+          for f in pk.bin vk.bin; do
+            curl -fsSL -o "keys/$f" \
+              "https://github.com/veilproof/veilproof-server/releases/download/keys-testnet/$f"
+          done
+          node prover/smoke.mjs \
+            prover/target/wasm32-unknown-unknown/release/veilproof_prover.wasm keys "$VK_SHA256"
