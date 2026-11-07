@@ -1,5 +1,11 @@
 # A full run on Stellar testnet
 
+> **This records a run through this server, on an earlier registry deployment.**
+> The hosted server has since been retired. The live demo is
+> [veilproof-web](https://veilproof.github.io/veilproof-web/), which proves in the
+> browser against a newer registry, so the secret no longer reaches a server there.
+> `scripts/e2e-testnet.mjs` in veilproof-registry repeats the run below on that path.
+
 Every step below was executed against the deployed contract. The transaction
 hashes are real and can be opened on a block explorer.
 
@@ -107,8 +113,7 @@ worthless to anyone but its subject.
 - The trusted setup was generated **single-party**. If its toxic waste survived,
   membership proofs can be forged, and no on-chain evidence would reveal it. A
   production deployment needs a multi-party ceremony.
-- The holder's secret is sent to the server to build the proof. The server does
-  not store or log it, but that is a promise, not a guarantee — proving in the
-  browser would remove the need to trust it. That is future work, and the
-  dashboard says so rather than implying otherwise.
+- The holder's secret is sent to the server to build the proof on this path. The
+  server does not store or log it, but that is a promise, not a guarantee. Proving
+  in the browser, which the dashboard now does, removes the need to trust it.
 - Nothing here is audited.

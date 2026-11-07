@@ -1,5 +1,9 @@
 # Deploying veilproof-server
 
+You don't need this for [the dashboard](https://github.com/veilproof/veilproof-web),
+which proves in the browser and has no backend. Run this server if you want the HTTP
+API, for example to integrate issuance with your own systems.
+
 The server needs three things: a Postgres database, a trusted setup, and the
 knowledge that its setup matches the circuit registered on-chain.
 

@@ -1,0 +1,52 @@
+name: Prover release
+
+# Publishes the WebAssembly prover from a tag, so what veilproof-web serves was
+# built here in the open rather than on someone's laptop. The dashboard pins the
+# resulting SHA-256.
+on:
+  push:
+    tags: ["prover-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      VK_SHA256: 85d36192c03cb9240eeb03cb6a7c8dd954fac43ca31955e01fadd2b58f827218
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Test
+        working-directory: prover
+        run: cargo test --locked
+
+      - name: Build
+        working-directory: prover
+        run: cargo build --locked --release --target wasm32-unknown-unknown
+
+      - name: Smoke test the wasm
+        run: |
+          mkdir keys
+          for f in pk.bin vk.bin; do
+            curl -fsSL -o "keys/$f" \
+              "https://github.com/veilproof/veilproof-server/releases/download/keys-testnet/$f"
+          done
+          node prover/smoke.mjs \
+            prover/target/wasm32-unknown-unknown/release/veilproof_prover.wasm keys "$VK_SHA256"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp prover/target/wasm32-unknown-unknown/release/veilproof_prover.wasm .
+          sha256sum veilproof_prover.wasm > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" veilproof_prover.wasm SHA256SUMS \
+            --title "$GITHUB_REF_NAME" \
+            --notes "The veilproof prover as WebAssembly. Built from this tag by CI; compatible with the keys-testnet setup ($VK_SHA256)."
